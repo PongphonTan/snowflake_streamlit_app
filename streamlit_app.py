@@ -2,6 +2,7 @@ import streamlit
 import pandas as pd
 import requests
 import snowflake.connector
+from urllib.error import URLError
 
 streamlit.title('My Parents New Healthy Dinner')
 streamlit.header('Breakfast Menu')
@@ -24,29 +25,49 @@ streamlit.dataframe(fruits_to_show)
 
 streamlit.header('Fruityvice Fruit Advice!')
 
-fruit_choice = streamlit.text_input('What fruit would you like information about?','Kiwi')
-streamlit.write('The user entered ', fruit_choice)
+def get_fruityvice_data(fruit_choice:str) -> pd.DataFrame:
+    fruityvice_response = requests.get('https://fruityvice.com/api/fruit/' + fruit_choice)
+    fruityvice_normalized = pd.json_normalize(fruityvice_response.json())
+    return fruityvice_normalized
 
-fruityvice_response = requests.get('https://fruityvice.com/api/fruit/' + fruit_choice)
-# streamlit.text(fruityvice_response)
-# streamlit.text(fruityvice_response.json())
+try:
+    fruit_choice = streamlit.text_input('What fruit would you like information about?')
+    if not fruit_choice:
+        streamlit.error('Please select a fruit to get information')
+    else:
+        
+        # streamlit.write('The user entered ', fruit_choice)
+        # streamlit.text(fruityvice_response)
+        # streamlit.text(fruityvice_response.json())
+        streamlit.dataframe(get_fruityvice_data(fruit_choice))
+except URLError as e:
+    streamlit.error()
 
-fruityvice_normalized = pd.json_normalize(fruityvice_response.json())
-streamlit.dataframe(fruityvice_normalized)
 
-streamlit.text('Hello from Snowflake:')
-my_cnx = snowflake.connector.connect(**streamlit.secrets["snowflake"])
-my_cur = my_cnx.cursor()
+
+# streamlit.text('Hello from Snowflake:')
+# my_cnx = snowflake.connector.connect(**streamlit.secrets["snowflake"])
+# my_cur = my_cnx.cursor()
 
 # my_cur.execute("SELECT CURRENT_USER(), CURRENT_ACCOUNT(), CURRENT_REGION()")
 # my_data_row = my_cur.fetchone()
 # streamlit.text(my_data_row)
 
 streamlit.header('The fruit load list contains:')
-my_cur.execute("select * from pc_rivery_db.public.fruit_load_list")
-my_data_rows = my_cur.fetchall()
-streamlit.dataframe(my_data_rows)
+def get_fruit_load_list() -> pd.DataFrame:
+    with my_cnx.cursor() as my_cur:
+        my_cur.execute('select * from pc_rivery_db.public.fruit_load_list')
+        return my_cur.fetch_all()
+
+if streamlit.button('Get Fruit Load List'):
+    my_cnx = snowflake.connector.connect(**streamlit.secrets["snowflake"])
+    my_data_rows = get_fruit_load_list()
+    streamlit.dataframe(my_data_rows)
+
+streamlit.stop()
 
 fruit_choice = streamlit.text_input('What fruit would you like to add?')
 add_my_fruit = fruit_choice
 streamlit.write('Thanks for adding ', add_my_fruit)
+
+my_cur.execute("insert into PC_RIVERY_DB.PUBLIC.FRUIT_LOAD_LIST values ('from streamlit')")
